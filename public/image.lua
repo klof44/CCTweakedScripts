@@ -1,12 +1,9 @@
-
-
 local mon = peripheral.find("monitor")
 
 mon.setBackgroundColor(colors.black)
 mon.clear()
 mon.setCursorPos(1,1)
 mon.setTextScale(0.5)
-term.redirect(mon)
 
 local pallette = {
     [1] = colors.white,
@@ -27,21 +24,34 @@ local pallette = {
     [16] = colors.black
 }
 
-local paletteRequest = http.get("https://laughing-pancake-9xq47x5g7r3pxq9-7270.app.github.dev/palette")
-local newPalette = textutils.unserializeJSON(paletteRequest.readAll())
-paletteRequest.close()
+local serverURL = "https://laughing-pancake-9xq47x5g7r3pxq9-7270.app.github.dev/"
 
-for i=1, 15 do
-    mon.setPaletteColor(pallette[i], newPalette[i])
-end
+while true do
+    write("Image name: ")
+    local image = read()
+    if image == "" then
+        image = "armada.png"
+    end
 
-local request = http.get("https://laughing-pancake-9xq47x5g7r3pxq9-7270.app.github.dev/image")
-local json = textutils.unserializeJSON(request.readAll())
-request.close()
+    local monSize = {mon.getSize()}
+    write("Monitor size: " .. monSize[1] .. "x" .. monSize[2] .. "\n")
 
-for i=1, #json["result"] do
-    local x = (i-1) % 79 + 1
-    local y = math.floor((i-1) / 79) + 1
-    mon.setCursorPos(x, y)
-    term.blit(" ", json["result"][i], json["result"][i])
+    local imageRequest = http.get(serverURL .. "image?image=" .. image .. "&height=" .. monSize[2] .. "&width=" .. monSize[1])
+    local json = textutils.unserializeJSON(imageRequest.readAll())
+    imageRequest.close()
+
+    for i=1, 15 do
+        mon.setPaletteColor(pallette[i], json["palette"][i])
+    end
+
+    term.redirect(mon)
+
+    for i=1, #json["data"] do
+        local x = (i-1) % monSize[1] + 1
+        local y = math.floor((i-1) / monSize[1]) + 1
+        mon.setCursorPos(x, y)
+        term.blit(" ", json["data"][i], json["data"][i])
+    end
+
+    term.redirect(term.native())
 end

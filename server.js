@@ -4,19 +4,11 @@ const express = require('express');
 const getPixels = require('get-pixels');
 const getColors = require('get-image-colors');
 
-let image = "./images/bocchi.png";
-let imgPath = `./images-resized/${image.split('/').pop()}`;
-
+if (!fs.existsSync('./images')) {
+	fs.mkdirSync('./images');
+}
 if (!fs.existsSync('./images-resized')) {
 	fs.mkdirSync('./images-resized');
-}
-
-if (!fs.existsSync(imgPath)) {
-	sharp(image)
-		.resize(79, 81)
-		.toFile(imgPath, (err, info) => {
-			if (err) throw err;
-		});
 }
 
 const app = express();
@@ -27,40 +19,54 @@ app.get('/', (req, res) => {
 	res.send(fs.readFileSync('./public/image.lua'));
 });
 
-app.get('/palette', (req, res) => {
-	getPalette().then(palette => {
-		res.json(palette);
-	});
-});
-
 app.get('/image', (req, res) => {
-	// Iterate through every pixel of the image
-	getPixels(imgPath, (err, pixels) => {
-		if (err) throw err;
-		let data = pixels.data;
-		let result = [];
-		getPalette().then(palette => {
-			for (let i = 0; i < data.length; i += 4) {
-				let r = data[i];
-				let g = data[i + 1];
-				let b = data[i + 2];
-				let a = data[i + 3];
-				result.push(clampColour(r, g, b, palette));
-			}
-			result = result.map(c => numToBlit(c).toString());
-			res.json({ result });
+	
+	let width = Number(req.query.width);
+	let height = Number(req.query.height);
+	if (!width || !height) {
+		res.json({ error: 'Missing width or height' });
+		return;
+	}
+
+	let largeImage = "./images/" + req.query.image;
+	let imgPath = `./images-resized/${largeImage.split('/').pop()}`;
+
+	if (!fs.existsSync(largeImage)) {
+		res.json({ error: 'Image not found' });
+		return;
+	}
+
+	console.log(`Using image: ${largeImage}`);
+
+	sharp(largeImage)
+		.resize(width, height, { fit: sharp.fit.contain })
+		.toFile(imgPath, (err, info) => {
+			getPixels(imgPath, (err, pixels) => {
+				if (err) throw err;
+				let data = pixels.data;
+				let result = [];
+				getPalette(imgPath).then(palette => {
+					for (let i = 0; i < data.length; i += 4) {
+						let r = data[i];
+						let g = data[i + 1];
+						let b = data[i + 2];
+						let a = data[i + 3];
+						result.push(clampColour(r, g, b, palette));
+					}
+					result = result.map(c => numToBlit(c).toString());
+					res.json({ data: result, palette });
+				});
+			});
 		});
-	});
 });
 
 app.listen(7270, () => {
 	console.log('Server running on port 727');
 });
 
-async function getPalette() {
+async function getPalette(imgPath) {
 	let colors = await getColors(imgPath, { count: 16 });
 	let palette = colors.map(color => Math.min(Math.max(parseInt(color.hex('rgb').replace('#', "0x"), 16), 0x111111), 0xF0F0F0));
-	console.log(palette);
 	return palette;
 }
 
