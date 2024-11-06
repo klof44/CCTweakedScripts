@@ -6,3 +6,5 @@ mon.setCursorPos(1,1)
 mon.setTextScale(0.5)
 term.redirect(mon)
 
+
+term.write(mon.getSize())

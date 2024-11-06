@@ -2,60 +2,104 @@ const fs = require('fs');
 const sharp = require('sharp');
 const express = require('express');
 const getPixels = require('get-pixels');
+const getColors = require('get-image-colors');
 
-sharp('armada.png')
-    .resize(121,81, sharp.fit.inside)
-    .toFile('armada-small.png', (err, info) => {
-        if (err) throw err;
-    });
+let image = "./images/bocchi.png";
+let imgPath = `./images-resized/${image.split('/').pop()}`;
+
+if (!fs.existsSync('./images-resized')) {
+	fs.mkdirSync('./images-resized');
+}
+
+if (!fs.existsSync(imgPath)) {
+	sharp(image)
+		.resize(79, 81)
+		.toFile(imgPath, (err, info) => {
+			if (err) throw err;
+		});
+}
 
 const app = express();
+
+app.use(express.static('./public'));
+
 app.get('/', (req, res) => {
-    res.send(fs.readFileSync('./public/image.lua', 'utf8'));
+	res.send(fs.readFileSync('./public/image.lua'));
 });
-app.get('/test', (req, res) => {
-    res.send(fs.readFileSync('./public/test.lua', 'utf8'));
+
+app.get('/palette', (req, res) => {
+	getPalette().then(palette => {
+		res.json(palette);
+	});
 });
+
 app.get('/image', (req, res) => {
-    // Iterate through every pixel of the image
-    getPixels('armada-small.png', (err, pixels) => {
-        if (err) throw err;
-        let data = pixels.data;
-        let width = pixels.shape[0];
-        let height = pixels.shape[1];
-        let result = [];
-        for (let i = 0; i < data.length; i += 4) {
-            let r = data[i];
-            let g = data[i + 1];
-            let b = data[i + 2];
-            let a = data[i + 3];
-            result.push(clampColour(r, g, b));
-        }
-        res.json({ result });
-    });
+	// Iterate through every pixel of the image
+	getPixels(imgPath, (err, pixels) => {
+		if (err) throw err;
+		let data = pixels.data;
+		let result = [];
+		getPalette().then(palette => {
+			for (let i = 0; i < data.length; i += 4) {
+				let r = data[i];
+				let g = data[i + 1];
+				let b = data[i + 2];
+				let a = data[i + 3];
+				result.push(clampColour(r, g, b, palette));
+			}
+			result = result.map(c => numToBlit(c).toString());
+			res.json({ result });
+		});
+	});
 });
+
 app.listen(7270, () => {
-    console.log('Server running on port 727');
+	console.log('Server running on port 727');
 });
 
-function clampColour(r, g, b) {
-    let colours = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
+async function getPalette() {
+	let colors = await getColors(imgPath, { count: 16 });
+	let palette = colors.map(color => Math.min(Math.max(parseInt(color.hex('rgb').replace('#', "0x"), 16), 0x111111), 0xF0F0F0));
+	console.log(palette);
+	return palette;
+}
 
-    var dec = getDec(r, g, b);
+function clampColour(r, g, b, palette) {
+	var dec = getDec(r, g, b);
 
-    var min = 0;
-    var distance = 0;
-    for (var i = 0; i < colours.length; i++) {
-        var d = Math.abs(dec - colours[i]);
-        if (i == 0 || d < distance) {
-            min = i;
-            distance = d;
-        }
-    }
+	var min = 0;
+	var distance = 0;
+	for (var i = 0; i < palette.length; i++) {
+		var d = Math.abs(dec - palette[i]);
+		if (i == 0 || d < distance) {
+			min = i;
+			distance = d;
+		}
+	}
 
-    return colours[min];
+	return min;
 }
 
 function getDec(r, g, b) {
-    return Math.round(((r << 16) + (g << 8) + b)/255);
+	return ((r << 16) + (g << 8) + b);
+}
+
+function numToBlit(num) {
+	if (num < 10) {
+		return num.toString();
+	}
+	switch (num) {
+		case 10:
+			return 'a';
+		case 11:
+			return 'b';
+		case 12:
+			return 'c';
+		case 13:
+			return 'd';
+		case 14:
+			return 'e';
+		case 15:
+			return 'f';
+	}
 }
