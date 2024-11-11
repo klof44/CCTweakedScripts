@@ -3,6 +3,7 @@
     "express": "^4.21.1",
     "get-image-colors": "^4.0.1",
     "get-pixels": "^3.3.3",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "ws": "^8.18.0"
   }
 }

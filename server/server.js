@@ -3,6 +3,9 @@ const sharp = require('sharp');
 const express = require('express');
 const getPixels = require('get-pixels');
 const getColors = require('get-image-colors');
+const { Worker } = require('worker_threads');
+
+process.chdir(__dirname);
 
 if (!fs.existsSync('./images')) {
 	fs.mkdirSync('./images');
@@ -10,6 +13,11 @@ if (!fs.existsSync('./images')) {
 if (!fs.existsSync('./images-resized')) {
 	fs.mkdirSync('./images-resized');
 }
+
+parseVideo().then(() => {
+	let size = (fs.statSync('./videos/vid.json').size / 1024).toFixed(2) + 'kb';
+	console.log(`Video Ready ${size}`);
+});
 
 const app = express();
 
@@ -64,6 +72,8 @@ app.listen(7270, () => {
 	console.log('Server running on port 727');
 });
 
+new Worker('./websocket.js');
+
 async function getPalette(imgPath) {
 	let colors = await getColors(imgPath, { count: 16 });
 	let palette = colors.map(color => Math.min(Math.max(parseInt(color.hex('rgb').replace('#', "0x"), 16), 0x111111), 0xF0F0F0));
@@ -108,4 +118,49 @@ function numToBlit(num) {
 		case 15:
 			return 'f';
 	}
+}
+
+async function parseVideo() {
+	let width = 143;
+	let height = 81;
+	if (!width || !height) {
+		res.json({ error: 'Missing width or height' });
+		return;
+	}
+	
+	let promises = [];
+	
+	let files = fs.readdirSync('./videos/out/');
+	let payload = [];
+	files.forEach(file => {
+		promises.push(new Promise((resolve, reject) => {
+			let imgPath = `./videos/out-resized/${file}`;
+			sharp(`./videos/out/${file}`)
+				.resize(width, height, { fit: sharp.fit.contain })
+				.toFile(imgPath, (err, info) => {
+					getPixels(imgPath, (err, pixels) => {
+						if (err) throw err;
+						let data = pixels.data;
+						let result = [];
+						getPalette(imgPath).then(palette => {
+							for (let i = 0; i < data.length; i += 4) {
+								let r = data[i];
+								let g = data[i + 1];
+								let b = data[i + 2];
+								let a = data[i + 3]; // transparency
+								result.push(clampColour(r, g, b, palette));
+							}
+							result = result.map(c => numToBlit(c).toString());
+			
+							payload[Number(file.split('.')[0]) - 1] = { data: result, palette };
+							resolve();
+						});
+					});
+				});
+		}));
+	});
+
+	Promise.allSettled(promises).then(() => {
+		fs.writeFileSync('./videos/vid.json', JSON.stringify({ payload }));
+	});
 }
