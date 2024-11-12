@@ -1,10 +1,6 @@
-local serverURL = "http://207.161.109.8:7270/"
-local mon = peripheral.find("monitor")
-
-mon.setBackgroundColor(colors.black)
-mon.clear()
-mon.setCursorPos(1,1)
-mon.setTextScale(0.5)
+term.setBackgroundColor(colors.black)
+term.clear()
+term.setCursorPos(1,1)
 
 local pallette = {
     [1] = colors.white,
@@ -25,14 +21,15 @@ local pallette = {
     [16] = colors.black
 }
 
+local serverURL = "https://laughing-pancake-9xq47x5g7r3pxq9-7270.app.github.dev/"
+
 while true do
-    write("Image name: ")
     local image = read()
     if image == "" then
         image = "armada.png"
     end
 
-    local monSize = {mon.getSize()}
+    local monSize = {term.getSize()}
     write("Monitor size: " .. monSize[1] .. "x" .. monSize[2] .. "\n")
 
     local imageRequest = http.get(serverURL .. "image?image=" .. image .. "&height=" .. monSize[2] .. "&width=" .. monSize[1])
@@ -40,17 +37,14 @@ while true do
     imageRequest.close()
 
     for i=1, 15 do
-        mon.setPaletteColor(pallette[i], json["palette"][i])
+        term.setPaletteColor(pallette[i], json["palette"][i])
     end
 
-    term.redirect(mon)
-
+    term.clear()
     for i=1, #json["data"] do
         local x = (i-1) % monSize[1] + 1
         local y = math.floor((i-1) / monSize[1]) + 1
-        mon.setCursorPos(x, y)
+        term.setCursorPos(x, y)
         term.blit(" ", json["data"][i], json["data"][i])
     end
-
-    term.redirect(term.native())
 end

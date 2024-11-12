@@ -1,10 +1,20 @@
+local serverURL = "http://207.161.109.8:7270/"
+local wsServerURL = "ws://207.161.109.8:7280/"
+
+if (fs.exists("/LibDeflate.lua")) then
+    local file = fs.open("/LibDeflate.lua", "w")
+    file.write(http.get(serverURL .. "LibDeflate.lua").readAll())
+    file.close()
+end
+local LibDeflate = require("/LibDeflate")
+local dfpwm = require("cc.audio.dfpwm")
+
 local mon = peripheral.find("monitor")
 
 mon.setBackgroundColor(colors.black)
 mon.clear()
 mon.setCursorPos(1, 1)
 mon.setTextScale(0.5)
-term.redirect(mon)
 
 local pallette = {
     [1] = colors.white,
@@ -25,36 +35,83 @@ local pallette = {
     [16] = colors.black
 }
 
-local serverURL = "ws://laughing-pancake-9xq47x5g7r3pxq9-7280.app.github.dev/"
-
 local monSize = { mon.getSize() }
 
-local ws = assert(http.websocket(serverURL .. "video?height=" .. monSize[2] .. "&width=" .. monSize[1]))
+local ws = assert(http.websocket(wsServerURL .. "video"))
+
 ws.send("INFO")
-local framesData = ws.receive()
-local chunks = textutils.unserializeJSON(framesData)["info"]['chunks']
+local infoData = ws.receive()
+print(infoData)
+local info = textutils.unserializeJSON(infoData)["info"]
 
-for i = 1, chunks do
-    ws.send("CHUNK " .. i)
-    local chunkData = ws.receive()
-    local chunk = textutils.unserializeJSON(chunkData)
+local chunks = tonumber(info['chunks'])
+local rate = tonumber(info['rate'])
 
-    for j = 1, #chunk["frames"] do        
-        sleep(1 / 10)
+ws.send("AUDIO")
+local audioData = ws.receive()
+local decompressedAudio = LibDeflate:DecompressDeflate(audioData)
+local audioFile = fs.open("/audio.dfpwm", "w")
+audioFile.write(decompressedAudio)
+audioFile.close()
+
+term.redirect(mon)
+
+ws.send("1")
+local nextChunkData = ws.receive()
+
+local chunk
+local currentChunkNum = 1
+local execTime = os.clock()
+
+local function getChunkData()
+    ws.send(currentChunkNum)
+    nextChunkData = ws.receive()
+end
+
+local function renderChunk()
+    for k = 1, #chunk do
+        sleep((1 / rate) - (os.clock() - execTime))
+        execTime = os.clock();
         mon.clear()
-    
-        for k = 1, 15 do
-            mon.setPaletteColor(pallette[k], chunk["palette"][j][k])
+
+        for j = 1, 15 do
+            mon.setPaletteColor(pallette[j], chunk[k]["palette"][j])
         end
-        
-    
-        for k = 1, #chunk["frames"][j] do
-            local x = (k - 1) % monSize[1] + 1
-            local y = math.floor((k - 1) / monSize[1]) + 1
+
+        for j = 1, #chunk[k]["data"] do
+            local x = (j - 1) % monSize[1] + 1
+            local y = math.floor((j - 1) / monSize[1]) + 1
             mon.setCursorPos(x, y)
-            term.blit(" ", chunk["frames"][j][k], chunk["frames"][j][k])
+            term.blit(" ", chunk[k]["data"][j], chunk[k]["data"][j])
         end
     end
 end
+
+local speaker = peripheral.find("speaker")
+local decoder = dfpwm.make_decoder()
+local function playAudio()
+    for lines in io.lines("/audio.dfpwm", 16 * 1024) do
+        local decoded = decoder(lines)
+        while not speaker.playAudio(decoded, 3) do
+            os.pullEvent("speaker_audio_empty")
+        end
+    end
+end
+
+local function renderLoop()
+    for i = 1, chunks do
+        local chunkData = nextChunkData
+        local decompressed = LibDeflate:DecompressDeflate(chunkData)
+        chunk = textutils.unserializeJSON(decompressed)
+
+        currentChunkNum = currentChunkNum + 2
+        parallel.waitForAll(getChunkData, renderChunk)
+
+        ws.send("SYNC")
+        ws.receive()
+    end
+end
+
+parallel.waitForAll(renderLoop, playAudio)
 
 ws.close()

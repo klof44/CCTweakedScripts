@@ -4,6 +4,7 @@ const express = require('express');
 const getPixels = require('get-pixels');
 const getColors = require('get-image-colors');
 const { Worker } = require('worker_threads');
+const dfpwm = require('dfpwm');
 
 process.chdir(__dirname);
 
@@ -14,11 +15,7 @@ if (!fs.existsSync('./images-resized')) {
 	fs.mkdirSync('./images-resized');
 }
 
-parseVideo().then(() => {
-	let size = (fs.statSync('./videos/vid.json').size / 1024).toFixed(2) + 'kb';
-	console.log(`Video Ready ${size}`);
-});
-
+parseVideo();
 const app = express();
 
 app.use(express.static('./public'));
@@ -71,8 +68,6 @@ app.get('/image', (req, res) => {
 app.listen(7270, () => {
 	console.log('Server running on port 727');
 });
-
-new Worker('./websocket.js');
 
 async function getPalette(imgPath) {
 	let colors = await getColors(imgPath, { count: 16 });
@@ -160,7 +155,14 @@ async function parseVideo() {
 		}));
 	});
 
+	let encoder = new dfpwm.Encoder();
+	let audio = fs.readFileSync('./videos/output.pcm');
+	let encoded = encoder.encode(audio);
+	fs.writeFileSync('./videos/audio.dfpwm', encoded);
+
 	Promise.allSettled(promises).then(() => {
 		fs.writeFileSync('./videos/vid.json', JSON.stringify({ payload }));
+		
+		new Worker('./websocket.js');
 	});
 }

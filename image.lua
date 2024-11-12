@@ -1,4 +1,3 @@
-local serverURL = "http://207.161.109.8:7270/"
 local mon = peripheral.find("monitor")
 
 mon.setBackgroundColor(colors.black)
@@ -24,6 +23,8 @@ local pallette = {
     [15] = colors.red,
     [16] = colors.black
 }
+
+local serverURL = "https://laughing-pancake-9xq47x5g7r3pxq9-7270.app.github.dev/"
 
 while true do
     write("Image name: ")
