@@ -1,4 +1,4 @@
-local serverURL = "http://207.161.109.8:7270/"
+local serverURL = ""
 local mon = peripheral.find("monitor")
 
 mon.setBackgroundColor(colors.black)

@@ -21,7 +21,7 @@ local pallette = {
     [16] = colors.black
 }
 
-local serverURL = "https://207.161.109.8:7270/"
+local serverURL = ""
 
 while true do
     local image = read()

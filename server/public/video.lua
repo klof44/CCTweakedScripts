@@ -1,5 +1,5 @@
-local serverURL = "http://207.161.109.8:7270/"
-local wsServerURL = "ws://207.161.109.8:7280/"
+local serverURL = ""
+local wsServerURL = ""
 
 if (fs.exists("/LibDeflate.lua")) then
     local file = fs.open("/LibDeflate.lua", "w")
@@ -84,6 +84,9 @@ local function renderChunk()
             mon.setCursorPos(x, y)
             term.blit(" ", chunk[k]["data"][j], chunk[k]["data"][j])
         end
+
+        ws.send("SYNC")
+        ws.receive()
     end
 end
 
@@ -99,16 +102,13 @@ local function playAudio()
 end
 
 local function renderLoop()
-    for i = 1, chunks do
+    for i = 1, chunks / 2 do
         local chunkData = nextChunkData
         local decompressed = LibDeflate:DecompressDeflate(chunkData)
         chunk = textutils.unserializeJSON(decompressed)
-
+        
         currentChunkNum = currentChunkNum + 2
         parallel.waitForAll(getChunkData, renderChunk)
-
-        ws.send("SYNC")
-        ws.receive()
     end
 end
 
